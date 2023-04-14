@@ -5,15 +5,18 @@ MultiDOFControl::MultiDOFControl(const ros::NodeHandle &nh, const ros::NodeHandl
                                                                                                 simulation_mode_enable_(false) {
     //local_p_sub_ = nh_.subscribe("/mavros/local_position/pose",10, &MultiDOFControl::poseCallback, this);
 
-    traj_pub_ = nh_.advertise<trajectory_msgs::MultiDOFJointTrajectory>("mavros/setpoint_raw/multidof", 10);
+    //traj_pub_ = nh_.advertise<trajectory_msgs::MultiDOFJointTrajectory>("mavros/setpoint_raw/multidof", 10);
     setpoint_p_pub_ = nh_.advertise<geometry_msgs::PoseStamped>("/mavros/setpoint_position/local", 10);
+    //command_pub_ = nh_.advertise<trajectory_msgs::MultiDOFJointTrajectory>(mav_msgs::default_topics::COMMAND_TRAJECTORY, 1);
+    //opt_point_pub_ = nh_.advertise<trajectory_msgs::MultiDOFJointTrajectoryPoint>("/mavros/setpoint_raw/local", 10);
+    //opt_point_pub_ = nh_.advertise<trajectory_msgs::MultiDOFJointTrajectoryPoint>("/mavros/setpoint_position/cmd_vel", 10);
     odom_sub_ = nh_.subscribe("/mavros/local_position/odom", 10, &MultiDOFControl::odomCallback, this);
     state_sub_ = nh_.subscribe("/mavros/state", 10, &MultiDOFControl::stateCallback, this);
     odom_error_pub_ = nh_.advertise<nav_msgs::Odometry>("odom_error", 1, true);
     arming_client_ = nh_.serviceClient<mavros_msgs::CommandBool>("/mavros/cmd/arming");
     set_mode_client_ = nh_.serviceClient<mavros_msgs::SetMode>("/mavros/set_mode");
 
-    mavros_pub_ = nh_.advertise<mavros_msgs::PositionTarget>("mavros/setpoint_raw/global_to_local", 10);
+    mavros_pub_ = nh_.advertise<mavros_msgs::PositionTarget>("/mavros/setpoint_raw/local", 10);
     nh_private_.getParam("/offb_node/odom_error", odom_error_);
     nh_private_.getParam("/offb_node/target_error", geo_error_);
     nh_private_.getParam("/offb_node/land_error", land_error_);
@@ -156,8 +159,8 @@ void MultiDOFControl::commander() {
         waitForArmAndOffboard(10);
         setMultiDOFPoints();
         takeOff(targetTransfer(current_odom_.pose.pose.position.x, current_odom_.pose.pose.position.y, z_takeoff_), hover_time_);
-        mapCheckingFlight(10);
-        //multiDOFFlight();
+        //mapCheckingFlight(10);
+        multiDOFFlight();
         //landing()
     }
     else {
@@ -273,9 +276,18 @@ void MultiDOFControl::multiDOFFlight() {
         if(0 <= i && i <= 54) {
             for(int j = 0; j < 10; j++) {
                 tf_[j].translation.x = global_setpoint_[i+j].x;
+                tf_[j].translation.y = global_setpoint_[i+j].y;
+                tf_[j].translation.z = global_setpoint_[i+j].z;
+                std::cout << "Local transform " << j << ": " << std::endl;
+                std::cout << tf_[j].translation.x << ", " << tf_[j].translation.y << ", " << tf_[j].translation.z << std::endl;
+                std::cout << "Global setpoint " << i+j << ": " << std::endl;
+                //ROS_INFO_STREAM(global_setpoint_);
+                std::cout << global_setpoint_[i+j].x << ", " << global_setpoint_[i+j].y << ", " << global_setpoint_[i+j].z << std::endl;
                 opt_points[j].transforms.push_back(tf_[j]); //push back the transform
                 opt_points[j].velocities.push_back(vel_); //push back the velocity
                 opt_points[j].accelerations.push_back(acc_); //push back the acceleration
+                std::cout << "Local setpoint " << j << ": " << std::endl;
+                std::cout << opt_points[j].transforms[0].translation.x << ", " << opt_points[j].transforms[0].translation.y << ", " << opt_points[j].transforms[0].translation.z << std::endl;
                 //std::cout << "Hello World 1" << std::endl;
                 if(tf_[j].translation.x == 16 && tf_[j].translation.y == 0) {
                     tf_[j].rotation.x = 0;
@@ -292,6 +304,8 @@ void MultiDOFControl::multiDOFFlight() {
                 tf_[j].translation.x = global_setpoint_[i+j].x;
                 tf_[j].translation.y = global_setpoint_[i+j].y;
                 tf_[j].translation.z = global_setpoint_[i+j].z;
+                std::cout << "Global setpoint " << i+j << ": " << std::endl;
+                std::cout << global_setpoint_[i+j].x << ", " << global_setpoint_[i+j].y << ", " << global_setpoint_[i+j].z << std::endl;
                 //std::cout << "Hello World 2" << std::endl;
                 }
                 if(i+j > 63) {
@@ -311,6 +325,10 @@ void MultiDOFControl::multiDOFFlight() {
                 }
             }
         }
+        opt_points[0].transforms[0].translation = tf_[0].translation; //opt_points[0].transforms.assign = 
+        opt_points[0].transforms[0].rotation = tf_[0].rotation;
+        std::cout << "-->Local transform " << 0 << ": " << std::endl;
+        std::cout << tf_[0].translation.x << ", " << tf_[0].translation.y << ", " << tf_[0].translation.z << std::endl;
         //control_point_ = opt_points[0];
         //setpoint_pub_.publish(control_point);
         for(int j = 0; j < 10; j++) {
@@ -321,16 +339,20 @@ void MultiDOFControl::multiDOFFlight() {
         //ROS_INFO_STREAM(pos_target_);
         //mavros_pub_.publish(pos_target_);
         traj_msg_.header.stamp = ros::Time::now();
-        traj_pub_.publish(traj_msg_);
-        pos_target_.header.stamp = ros::Time::now();
-        pos_target_.yaw = tf::getYaw(opt_points[0].transforms[0].rotation);
+        //traj_pub_.publish(traj_msg_);
+        //opt_point_pub_.publish(opt_points[0]);
+        std::cout << "The control point is: ";
+        std::cout << opt_points[0].transforms[0].translation.x << opt_points[0].transforms[0].translation.y << opt_points[0].transforms[0].translation.z << std::endl;
+        target_enu_pose_.header.stamp = ros::Time::now();
+                //traj_pub_.publish(traj_msg_);
+        // pos_target_.header.stamp = ros::Time::now();
+        // pos_target_.yaw = tf::getYaw(opt_points[0].transforms[0].rotation);
 
         target_enu_pose_.pose.position.x = opt_points[0].transforms[0].translation.x;
         target_enu_pose_.pose.position.y = opt_points[0].transforms[0].translation.y;
         target_enu_pose_.pose.position.z = opt_points[0].transforms[0].translation.z;
-        std::cout << "The control point is: ";
-        std::cout << opt_points[0].transforms[0].translation.x << opt_points[0].transforms[0].translation.y << opt_points[0].transforms[0].translation.z << std::endl;
-        target_enu_pose_.header.stamp = ros::Time::now();
+
+
         //mavros_pub_.publish(pos_target_);
 
         // ROS_INFO_STREAM(target_enu_pose_);

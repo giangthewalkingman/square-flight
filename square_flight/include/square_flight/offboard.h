@@ -14,6 +14,7 @@
 #include <mavros_msgs/SetMode.h>
 #include <mavros_msgs/PositionTarget.h>
 #include<tf/transform_datatypes.h>
+//#include<mavros_msgs
 
 class MultiDOFControl {
     public:
@@ -32,7 +33,10 @@ class MultiDOFControl {
     ros::Publisher odom_error_pub_; //publish odom error before arm
     ros::Publisher traj_pub_; //publish trajectory
     ros::Publisher setpoint_p_pub_;
+    ros::Publisher opt_point_pub_;
     ros::Publisher mavros_pub_;
+    ros::Publisher command_pub_;
+
     ros::ServiceClient set_mode_client_;
     ros::ServiceClient arming_client_;
     mavros_msgs::SetMode offboard_setmode_; //check mode flight of uav
