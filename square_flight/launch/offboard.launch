@@ -1,7 +1,7 @@
 <launch>
     <arg name="simulation" default="true"/>
-    <arg name="desired_velocity" default="0.35"/>
-    <arg name="desired_planning_velocity" default="0.1"/>
+    <arg name="desired_velocity" default="2"/>
+    <arg name="desired_planning_velocity" default="0.00001"/>
     <arg name="hover_time" default="5.0"/>
     <!-- <rosparam command="load" file="$(find enu)/config/config.yaml" /> -->
     <node name="offb_node" pkg="square_flight" type="offb_node" output="screen">

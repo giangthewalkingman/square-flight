@@ -84,6 +84,7 @@ class MultiDOFControl {
 
     void setMultiDOFPoints();
     void multiDOFFlight();
+    void velTest();
     void mapCheckingFlight(double hz);
     void setOffboardStream(double hz, trajectory_msgs::MultiDOFJointTrajectoryPoint first_target);
     void distanceBetween(geometry_msgs::PoseStamped current_position, geometry_msgs::PoseStamped target_position);
