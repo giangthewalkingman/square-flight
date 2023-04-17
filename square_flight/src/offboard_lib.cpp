@@ -21,6 +21,7 @@ MultiDOFControl::MultiDOFControl(const ros::NodeHandle &nh, const ros::NodeHandl
     nh_private_.getParam("/offb_node/target_error", geo_error_);
     nh_private_.getParam("/offb_node/land_error", land_error_);
     nh_private_.getParam("/offb_node/desired_velocity", vel_desired_);
+    nh_private_.getParam("/offb_node/desired_planning_velocity", vel_planning_desired_);
     nh_private_.getParam("/offb_node/hover_time", hover_time_);
     nh_private_.param<bool>("/offb_node/simulation_mode_enable", simulation_mode_enable_, simulation_mode_enable_);
     waitForPredicate(10.0);
@@ -211,9 +212,12 @@ void MultiDOFControl::setMultiDOFPoints() {
         vel_.angular.x = 0;
         vel_.angular.y = 0;
         vel_.angular.z = 0;
-        vel_.linear.x = vel_desired_;
-        vel_.linear.y = vel_desired_;
-        vel_.linear.z = vel_desired_;
+        // vel_.linear.x = vel_desired_;
+        // vel_.linear.y = vel_desired_;
+        // vel_.linear.z = vel_desired_;
+        vel_.linear.x = vel_planning_desired_;
+        vel_.linear.y = vel_planning_desired_;
+        vel_.linear.z = vel_planning_desired_;
         //set acceleration
         acc_.angular.x = 0;
         acc_.angular.y = 0;
@@ -290,10 +294,27 @@ void MultiDOFControl::multiDOFFlight() {
                 std::cout << opt_points[j].transforms[0].translation.x << ", " << opt_points[j].transforms[0].translation.y << ", " << opt_points[j].transforms[0].translation.z << std::endl;
                 //std::cout << "Hello World 1" << std::endl;
                 if(tf_[j].translation.x == 16 && tf_[j].translation.y == 0) {
-                    tf_[j].rotation.x = 0;
-                    tf_[j].rotation.y = 0;
-                    tf_[j].rotation.z = 0.7071068;
-                    tf_[j].rotation.w = 0.7071068;
+                    // tf_[j].rotation.x = 0;
+                    // tf_[j].rotation.y = 0;
+                    // tf_[j].rotation.z = 0.7071068;
+                    // tf_[j].rotation.w = 0.7071068;
+                    tf_[j].rotation = tf::createQuaternionMsgFromYaw(PI/2);
+                    opt_points[j].transforms.push_back(tf_[j]); //push back the transform
+                }
+                if(tf_[j].translation.x == 16 && tf_[j].translation.y == 16) {
+                    // tf_[j].rotation.x = 0;
+                    // tf_[j].rotation.y = 0;
+                    // tf_[j].rotation.z = 1;
+                    // tf_[j].rotation.w = ;
+                    tf_[j].rotation = tf::createQuaternionMsgFromYaw(PI);
+                    opt_points[j].transforms.push_back(tf_[j]); //push back the transform
+                }
+                if(tf_[j].translation.x == 0 && tf_[j].translation.y == 16) {
+                    // tf_[j].rotation.x = 0;
+                    // tf_[j].rotation.y = 0;
+                    // tf_[j].rotation.z = 0.7071068;
+                    // tf_[j].rotation.w = 0.7071068;
+                    tf_[j].rotation = tf::createQuaternionMsgFromYaw(PI*3/2);
                     opt_points[j].transforms.push_back(tf_[j]); //push back the transform
                 }
             }
@@ -338,27 +359,39 @@ void MultiDOFControl::multiDOFFlight() {
         //ROS_INFO_STREAM_ONCE(traj_msg_);
         //ROS_INFO_STREAM(pos_target_);
         //mavros_pub_.publish(pos_target_);
-        traj_msg_.header.stamp = ros::Time::now();
+        //traj_msg_.header.stamp = ros::Time::now();
         //traj_pub_.publish(traj_msg_);
         //opt_point_pub_.publish(opt_points[0]);
         std::cout << "The control point is: ";
         std::cout << opt_points[0].transforms[0].translation.x << opt_points[0].transforms[0].translation.y << opt_points[0].transforms[0].translation.z << std::endl;
         target_enu_pose_.header.stamp = ros::Time::now();
                 //traj_pub_.publish(traj_msg_);
-        // pos_target_.header.stamp = ros::Time::now();
-        // pos_target_.yaw = tf::getYaw(opt_points[0].transforms[0].rotation);
+         pos_target_.type_mask = mavros_msgs::PositionTarget::IGNORE_AFX
+    | mavros_msgs::PositionTarget::IGNORE_AFY
+    | mavros_msgs::PositionTarget::IGNORE_AFZ
+    | mavros_msgs::PositionTarget::IGNORE_VY
+    | mavros_msgs::PositionTarget::IGNORE_VZ
+    //| mavros_msgs::PositionTarget::IGNORE_YAW
+    | mavros_msgs::PositionTarget::FORCE;
+        pos_target_.header.stamp = ros::Time::now();
+        pos_target_.position.x = opt_points[0].transforms[0].translation.x;
+        pos_target_.position.y = opt_points[0].transforms[0].translation.y;
+        pos_target_.position.z = opt_points[0].transforms[0].translation.z;
+        pos_target_.velocity = opt_points[0].velocities[0].linear;
+        pos_target_.yaw = tf::getYaw(opt_points[0].transforms[0].rotation);
+
 
         target_enu_pose_.pose.position.x = opt_points[0].transforms[0].translation.x;
         target_enu_pose_.pose.position.y = opt_points[0].transforms[0].translation.y;
         target_enu_pose_.pose.position.z = opt_points[0].transforms[0].translation.z;
 
 
-        //mavros_pub_.publish(pos_target_);
+        mavros_pub_.publish(pos_target_);
 
         // ROS_INFO_STREAM(target_enu_pose_);
         // ROS_INFO_STREAM(current_odom_);
         //std::cout<<"Hello World";
-        setpoint_p_pub_.publish(target_enu_pose_);
+        //setpoint_p_pub_.publish(target_enu_pose_);
         //target_reached = checkPositionError(geo_error_, targetTransfer(global_setpoint_[i].x, global_setpoint_[i].y, global_setpoint_[i].z)); //check if drone reaches target or not
         //std::cout<< global_setpoint_[i].x << global_setpoint_[i].y << global_setpoint_[i].z;
         target_reached = checkPositionError(geo_error_, targetTransfer(opt_points[0].transforms[0].translation.x, opt_points[0].transforms[0].translation.y, opt_points[0].transforms[0].translation.z)); 
@@ -366,6 +399,9 @@ void MultiDOFControl::multiDOFFlight() {
             std::cout << " i = " << i << std::endl;
             i++; //increase i after the drone reaches the target
             std::cout << "i++ = " << i << std::endl;
+        }
+        else{
+            mavros_pub_.publish(pos_target_);
         }
         if(i==64) {
             final_target_reached = true; //stop the loop when the final target is reached

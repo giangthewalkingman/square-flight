@@ -22,6 +22,8 @@ class MultiDOFControl {
     ~MultiDOFControl();
     //void setGlobalTrajectory();
     private:
+    const double PI = 3.141592653589793238463; // PI
+
     ros::NodeHandle nh_;
     ros::NodeHandle nh_private_;
 
@@ -69,6 +71,7 @@ class MultiDOFControl {
     nav_msgs::Odometry current_odom_;
 
     double vel_desired_;
+    double vel_planning_desired_;
     double geo_error_;
     double hover_time_;
     double land_error_;
