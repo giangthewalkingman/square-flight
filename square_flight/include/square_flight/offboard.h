@@ -7,14 +7,16 @@
 #include <geometry_msgs/Transform.h>
 #include <geometry_msgs/Twist.h>
 #include <geometry_msgs/PoseStamped.h>
+#include <geometry_msgs/TwistStamped.h>
 #include <nav_msgs/Odometry.h>
 #include <eigen3/Eigen/Dense>
 #include <mavros_msgs/State.h>
 #include <mavros_msgs/CommandBool.h>
 #include <mavros_msgs/SetMode.h>
 #include <mavros_msgs/PositionTarget.h>
-#include<tf/transform_datatypes.h>
+#include <tf/transform_datatypes.h>
 //#include<mavros_msgs
+#include <square_flight/pid_controller_base.h>
 
 class MultiDOFControl {
     public:
@@ -22,6 +24,8 @@ class MultiDOFControl {
     ~MultiDOFControl();
     //void setGlobalTrajectory();
     private:
+    const double PI = 3.141592653589793238463; // PI
+
     ros::NodeHandle nh_;
     ros::NodeHandle nh_private_;
 
@@ -69,6 +73,7 @@ class MultiDOFControl {
     nav_msgs::Odometry current_odom_;
 
     double vel_desired_;
+    double vel_planning_desired_;
     double geo_error_;
     double hover_time_;
     double land_error_;
@@ -81,6 +86,8 @@ class MultiDOFControl {
 
     void setMultiDOFPoints();
     void multiDOFFlight();
+    void multiDOFFlightwithPIDControl();
+    void velTest();
     void mapCheckingFlight(double hz);
     void setOffboardStream(double hz, trajectory_msgs::MultiDOFJointTrajectoryPoint first_target);
     void distanceBetween(geometry_msgs::PoseStamped current_position, geometry_msgs::PoseStamped target_position);
@@ -104,6 +111,12 @@ class MultiDOFControl {
 	{
         return x*x;
     }; 
+
+    //PID control----------------------------------------------------------------------------------//
+    // set up pid coefficient
+    double kp = 0.4, ki = 0.0, kd = 3.4;
+    geometry_msgs::TwistStamped a;
+    ros::Publisher cmd_vel_;
 
 
 
