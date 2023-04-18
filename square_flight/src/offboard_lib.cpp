@@ -6,10 +6,8 @@ MultiDOFControl::MultiDOFControl(const ros::NodeHandle &nh, const ros::NodeHandl
     //local_p_sub_ = nh_.subscribe("/mavros/local_position/pose",10, &MultiDOFControl::poseCallback, this);
 
     //traj_pub_ = nh_.advertise<trajectory_msgs::MultiDOFJointTrajectory>("mavros/setpoint_raw/multidof", 10);
+    cmd_vel_ = nh_.advertise<geometry_msgs::TwistStamped>("/mavros/setpoint_velocity/cmd_vel", 10);
     setpoint_p_pub_ = nh_.advertise<geometry_msgs::PoseStamped>("/mavros/setpoint_position/local", 10);
-    //command_pub_ = nh_.advertise<trajectory_msgs::MultiDOFJointTrajectory>(mav_msgs::default_topics::COMMAND_TRAJECTORY, 1);
-    //opt_point_pub_ = nh_.advertise<trajectory_msgs::MultiDOFJointTrajectoryPoint>("/mavros/setpoint_raw/local", 10);
-    //opt_point_pub_ = nh_.advertise<trajectory_msgs::MultiDOFJointTrajectoryPoint>("/mavros/setpoint_position/cmd_vel", 10);
     odom_sub_ = nh_.subscribe("/mavros/local_position/odom", 10, &MultiDOFControl::odomCallback, this);
     state_sub_ = nh_.subscribe("/mavros/state", 10, &MultiDOFControl::stateCallback, this);
     odom_error_pub_ = nh_.advertise<nav_msgs::Odometry>("odom_error", 1, true);
@@ -141,32 +139,41 @@ void MultiDOFControl::odomCallback(const nav_msgs::Odometry::ConstPtr &msg) {
 }
 
 void MultiDOFControl::commander() {
-    // ros::Rate rate(10);
-    // int i = 0;
-    // while(ros::ok()) {
-    //     std::cout << i << std::endl;
-    //     i++;
-    //     ros::spinOnce();
-    //     rate.sleep();
-    // }
-    std::cout << "Input the height: ";
-    std::cin >> z_takeoff_;
-    std::cout << "Press (1) to start flying, (0) to cancel: ";
-    char mode;
-    std::cin >> mode;
-    if(mode == '1') {
+    // ::setGlobalTrajectory();
+    // setMultiDOFPoints();
+    std::cout << "Choose mode: " << std::endl;
+    std::cout << "(1): Map checking flight" << std::endl; 
+    std::cout << "(2): MultiDOF Flight" << std::endl; 
+    std::cout << "(3): MultiDOF Flight with PID Control" << std::endl; 
+    int mode;
+    do {
+        std::cin >> mode;
+    } while(mode!=1&&mode!=2&&mode!=3);
+    setOffboardStream(10, targetTransfer(current_odom_.pose.pose.position.x, current_odom_.pose.pose.position.y, z_takeoff_));
+    waitForArmAndOffboard(10);
+    if(mode == 2) {
+        std::cout << "Input the height: ";
+        std::cin >> z_takeoff_;
         ::setGlobalTrajectory();
-        setOffboardStream(10, targetTransfer(current_odom_.pose.pose.position.x, current_odom_.pose.pose.position.y, z_takeoff_));
-        waitForArmAndOffboard(10);
         setMultiDOFPoints();
+        // setOffboardStream(10, targetTransfer(current_odom_.pose.pose.position.x, current_odom_.pose.pose.position.y, z_takeoff_));
+        // waitForArmAndOffboard(10);
+        // setMultiDOFPoints();
         takeOff(targetTransfer(0.0, 0.0, z_takeoff_), hover_time_);
         //mapCheckingFlight(10);
         multiDOFFlight();
-        //velTest();
-        //landing()
     }
-    else {
-        commander();
+    else if(mode == 1) {
+        mapCheckingFlight(10);
+    }
+    else if(mode == 3) {
+        std::cout << "Fly with PID Control: " << std::endl;
+        std::cout << "Input the height: ";
+        std::cin >> z_takeoff_;
+        ::setGlobalTrajectory();
+        setMultiDOFPoints();
+        takeOff(targetTransfer(0.0, 0.0, z_takeoff_), hover_time_);
+        multiDOFFlightwithPIDControl();
     }
 }
 
@@ -193,10 +200,10 @@ void setGlobalTrajectory() {
             global_setpoint_[i].y = 64 - i; //decrease y
         }
     }
-    for(int i = 0; i < 64; i++) {
-        std::cout << "Setpoint (" <<i <<"): " << std::endl;
-        std::cout << global_setpoint_[i].x <<", " <<global_setpoint_[i].y << ", "<<global_setpoint_[i].z<<std::endl;
-    }
+    // for(int i = 0; i < 64; i++) {
+    //     std::cout << "Setpoint (" <<i <<"): " << std::endl;
+    //     std::cout << global_setpoint_[i].x <<", " <<global_setpoint_[i].y << ", "<<global_setpoint_[i].z<<std::endl;
+    // }
     // global_setpoint_[5].x = 7;
     // global_setpoint_[5].y = 5;
     // global_setpoint_[5].z = 10;
@@ -361,12 +368,6 @@ void MultiDOFControl::multiDOFFlight() {
         pos_target_.velocity = opt_points[0].velocities[0].linear;
         pos_target_.yaw = tf::getYaw(opt_points[0].transforms[0].rotation);
 
-
-        target_enu_pose_.pose.position.x = opt_points[0].transforms[0].translation.x;
-        target_enu_pose_.pose.position.y = opt_points[0].transforms[0].translation.y;
-        target_enu_pose_.pose.position.z = opt_points[0].transforms[0].translation.z;
-
-
         mavros_pub_.publish(pos_target_);
         target_reached = checkPositionError(geo_error_, targetTransfer(opt_points[0].transforms[0].translation.x, opt_points[0].transforms[0].translation.y, opt_points[0].transforms[0].translation.z)); 
         if(target_reached) {
@@ -386,6 +387,149 @@ void MultiDOFControl::multiDOFFlight() {
         rate.sleep();
     }
 }
+
+void MultiDOFControl::multiDOFFlightwithPIDControl() {
+    //geometry_msgs::PoseStamped xyz_reached;
+    ros::Rate rate(10.0);
+    //bool target_reached = checkPositionError(geo_error_, );
+    bool first_target_reached = false;
+    bool final_target_reached = false;
+    bool target_reached = false;
+    first_target_reached = checkPositionError(geo_error_, targetTransfer(current_odom_.pose.pose.position.x, current_odom_.pose.pose.position.y, z_takeoff_));
+    //int i = 0;
+    if(first_target_reached) {
+        std:: cout << "Start multi DOF Flight." << std::endl;
+        target_reached = true;
+    }
+    for(int i = 0; i <= 64; i++) {
+        if(0 <= i && i <= 54) {
+            for(int j = 0; j < 10; j++) {
+                tf_[j].translation.x = global_setpoint_[i+j].x;
+                tf_[j].translation.y = global_setpoint_[i+j].y;
+                tf_[j].translation.z = global_setpoint_[i+j].z;
+                std::cout << "Local transform " << j << ": " << std::endl;
+                std::cout << tf_[j].translation.x << ", " << tf_[j].translation.y << ", " << tf_[j].translation.z << std::endl;
+                std::cout << "Global setpoint " << i+j << ": " << std::endl;
+                //ROS_INFO_STREAM(global_setpoint_);
+                std::cout << global_setpoint_[i+j].x << ", " << global_setpoint_[i+j].y << ", " << global_setpoint_[i+j].z << std::endl;
+                opt_points[j].transforms.push_back(tf_[j]); //push back the transform
+                opt_points[j].velocities.push_back(vel_); //push back the velocity
+                opt_points[j].accelerations.push_back(acc_); //push back the acceleration
+                std::cout << "Local setpoint " << j << ": " << std::endl;
+                std::cout << opt_points[j].transforms[0].translation.x << ", " << opt_points[j].transforms[0].translation.y << ", " << opt_points[j].transforms[0].translation.z << std::endl;
+                //std::cout << "Hello World 1" << std::endl;
+                if(tf_[j].translation.x == 16 && tf_[j].translation.y == 0) {
+                    tf_[j].rotation = tf::createQuaternionMsgFromYaw(PI/2);
+                    opt_points[j].transforms.push_back(tf_[j]); //push back the transform
+                }
+                if(tf_[j].translation.x == 16 && tf_[j].translation.y == 16) {
+                    tf_[j].rotation = tf::createQuaternionMsgFromYaw(PI);
+                    opt_points[j].transforms.push_back(tf_[j]); //push back the transform
+                }
+                if(tf_[j].translation.x == 0 && tf_[j].translation.y == 16) {
+                    tf_[j].rotation = tf::createQuaternionMsgFromYaw(PI*3/2);
+                    opt_points[j].transforms.push_back(tf_[j]); //push back the transform
+                }
+            }
+        }
+        if(54 < i && i < 64) {
+            for(int j = 0; j < 10; j++) {
+                if(i+j <= 63) {
+                tf_[j].translation.x = global_setpoint_[i+j].x;
+                tf_[j].translation.y = global_setpoint_[i+j].y;
+                tf_[j].translation.z = global_setpoint_[i+j].z;
+                std::cout << "Global setpoint " << i+j << ": " << std::endl;
+                std::cout << global_setpoint_[i+j].x << ", " << global_setpoint_[i+j].y << ", " << global_setpoint_[i+j].z << std::endl;
+                //std::cout << "Hello World 2" << std::endl;
+                }
+                if(i+j > 63) {
+                tf_[j].translation.x = global_setpoint_[0].x;
+                tf_[j].translation.y = global_setpoint_[0].y;
+                tf_[j].translation.z = global_setpoint_[0].z;
+                }
+                opt_points[j].transforms.push_back(tf_[j]); //push back the transform
+                opt_points[j].velocities.push_back(vel_); //push back the velocity
+                opt_points[j].accelerations.push_back(acc_); //push back the acceleration
+            }
+        }
+        if(i==64) {
+            for(int j = 0; j < 10; j++) {
+                tf_[j].translation.x = global_setpoint_[0].x;
+                tf_[j].translation.y = global_setpoint_[0].y;
+                tf_[j].translation.z = global_setpoint_[0].z;
+                std::cout << "Global setpoint " << 0 << ": " << std::endl;
+                std::cout << global_setpoint_[0].x << ", " << global_setpoint_[0].y << ", " << global_setpoint_[0].z << std::endl;
+                tf_[j].rotation = tf::createQuaternionMsgFromYaw(2*PI);
+                opt_points[j].transforms.push_back(tf_[j]); //push back the transform
+                opt_points[j].velocities.push_back(vel_); //push back the velocity
+                opt_points[j].accelerations.push_back(acc_); //push back the acceleration
+            }
+        }
+        opt_points[0].transforms[0].translation = tf_[0].translation; //opt_points[0].transforms.assign = 
+        opt_points[0].transforms[0].rotation = tf_[0].rotation;
+        std::cout << "-->Local transform " << 0 << ": " << std::endl;
+        std::cout << tf_[0].translation.x << ", " << tf_[0].translation.y << ", " << tf_[0].translation.z << std::endl;
+        //control_point_ = opt_points[0];
+        //setpoint_pub_.publish(control_point);
+        for(int j = 0; j < 10; j++) {
+            traj_msg_.points.push_back(opt_points[j]);
+        }
+        traj_msg_.header.stamp = ros::Time::now();
+        std::cout << "The control point is: ";
+        std::cout << opt_points[0].transforms[0].translation.x << opt_points[0].transforms[0].translation.y << opt_points[0].transforms[0].translation.z << std::endl;
+
+
+        // set up the velocity of x axis  
+        PidControllerBase pid_cmd(kp, ki, kd);
+        pid_cmd.setUMax(0.5);
+        pid_cmd.setUMin(-0.5);
+
+        // set up the velocity of y axis 
+        PidControllerBase pid_cmd1(kp, ki, kd);
+        pid_cmd1.setUMax(0.5);
+        pid_cmd1.setUMin(-0.5);
+
+        // set up the velocity of z axis 
+        PidControllerBase pid_cmd2(kp, ki, kd);
+        pid_cmd2.setUMax(0.4);
+        pid_cmd2.setUMin(-0.4);
+
+        target_enu_pose_.header.stamp = ros::Time::now();
+        target_enu_pose_.pose.position.x =  opt_points[0].transforms[0].translation.x;
+        target_enu_pose_.pose.position.y =  opt_points[0].transforms[0].translation.y;
+        target_enu_pose_.pose.position.z =  opt_points[0].transforms[0].translation.z;
+        target_enu_pose_.pose.orientation = opt_points[0].transforms[0].rotation;
+        ros::Time last_time = ros::Time::now();
+        //setpoint_p_pub_.publish(target_enu_pose_);
+        while (!target_reached && ros::ok()) {   
+                a.twist.linear.x = pid_cmd.compute(target_enu_pose_.pose.position.x,current_odom_.pose.pose.position.x, last_time);
+                a.twist.linear.y = pid_cmd1.compute(target_enu_pose_.pose.position.y,current_odom_.pose.pose.position.y, last_time);
+                a.twist.linear.z = pid_cmd2.compute(target_enu_pose_.pose.position.z,current_odom_.pose.pose.position.z, last_time);
+                cmd_vel_.publish(a);
+                ros::spinOnce();
+                rate.sleep();
+                target_reached = checkPositionError(geo_error_, target_enu_pose_);
+            }
+            ros::Time t_check;
+            t_check = ros::Time::now();
+        while ((ros::Time::now()-t_check)<ros::Duration(3))
+        {   
+            setpoint_p_pub_.publish(target_enu_pose_);
+            target_reached = checkPositionError(geo_error_, target_enu_pose_);
+            ros::spinOnce();
+            rate.sleep();
+        }
+        //i++;
+        if(i>64) {
+            final_target_reached = true; //stop the loop when the final target is reached
+            landing(targetTransfer(current_odom_.pose.pose.position.x, current_odom_.pose.pose.position.y, 0.0));
+        }
+        //ROS_INFO_STREAM_ONCE("ROS is spinning.");
+        // ros::spinOnce();
+        // rate.sleep();
+    }
+}
+
 
 void MultiDOFControl::velTest() {
     ros::Rate rate(10);

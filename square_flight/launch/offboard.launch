@@ -1,13 +1,13 @@
 <launch>
     <arg name="simulation" default="true"/>
-    <arg name="desired_velocity" default="2"/>
+    <arg name="desired_velocity" default="0.7"/>
     <arg name="desired_planning_velocity" default="0.00001"/>
     <arg name="hover_time" default="5.0"/>
     <!-- <rosparam command="load" file="$(find enu)/config/config.yaml" /> -->
     <node name="offb_node" pkg="square_flight" type="offb_node" output="screen">
         <param name="simulation_mode_enable" type="bool" value="$(arg simulation)"/>
         <param name="land_error" type="double" value="0.1"/>
-        <param name="target_error" type="double" value="0.1"/>
+        <param name="target_error" type="double" value="0.15"/>
         <param name="hover_time" type="double" value="$(arg hover_time)"/>
         <param name="desired_velocity" type="double" value="$(arg desired_velocity)"/>
         <param name="desired_planning_velocity" type="double" value="$(arg desired_planning_velocity)"/>

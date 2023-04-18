@@ -38,6 +38,14 @@ include_directories(
 
 roslaunch_add_file_check(launch)
 
+
+add_library(pid_controller_base
+  src/pid_controller_base.cpp
+)
+target_link_libraries(pid_controller_base
+  ${catkin_LIBRARIES}
+)
+
 add_library(offboard_lib
   src/offboard_lib.cpp
 )
@@ -48,6 +56,7 @@ target_link_libraries(offboard_lib
 add_executable(offb_node src/offboard_node.cpp)
 target_link_libraries(offb_node
   offboard_lib
+  pid_controller_base
 )
 
 add_executable(setmode_offb src/setmode_offb.cpp)

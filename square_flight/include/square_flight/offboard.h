@@ -7,14 +7,16 @@
 #include <geometry_msgs/Transform.h>
 #include <geometry_msgs/Twist.h>
 #include <geometry_msgs/PoseStamped.h>
+#include <geometry_msgs/TwistStamped.h>
 #include <nav_msgs/Odometry.h>
 #include <eigen3/Eigen/Dense>
 #include <mavros_msgs/State.h>
 #include <mavros_msgs/CommandBool.h>
 #include <mavros_msgs/SetMode.h>
 #include <mavros_msgs/PositionTarget.h>
-#include<tf/transform_datatypes.h>
+#include <tf/transform_datatypes.h>
 //#include<mavros_msgs
+#include <square_flight/pid_controller_base.h>
 
 class MultiDOFControl {
     public:
@@ -84,6 +86,7 @@ class MultiDOFControl {
 
     void setMultiDOFPoints();
     void multiDOFFlight();
+    void multiDOFFlightwithPIDControl();
     void velTest();
     void mapCheckingFlight(double hz);
     void setOffboardStream(double hz, trajectory_msgs::MultiDOFJointTrajectoryPoint first_target);
@@ -108,6 +111,12 @@ class MultiDOFControl {
 	{
         return x*x;
     }; 
+
+    //PID control----------------------------------------------------------------------------------//
+    // set up pid coefficient
+    double kp = 0.4, ki = 0.0, kd = 3.4;
+    geometry_msgs::TwistStamped a;
+    ros::Publisher cmd_vel_;
 
 
 
