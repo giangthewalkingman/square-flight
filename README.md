@@ -1,13 +1,12 @@
-# square-flight
+# square-flight-package
 In this package, drone can follow a square trajectory and land at original position.
 
-Branches:
+### Mode:
+1) Map cheking flight
+2) MultiDOF Flight with velocity control 
+3) MultiDOF Flight with customized PID control
 
-master: position control
-
-vel-control: velocity control (adding velocity)
-
-In terminal:
+### In terminal:
 
 T1: 
 
